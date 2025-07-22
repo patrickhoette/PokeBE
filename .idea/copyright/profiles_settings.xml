@@ -1,0 +1,14 @@
+<component name="CopyrightManager">
+  <settings default="MIT-0">
+    <module2copyright>
+      <element module="PokeBE Code" copyright="MIT-0" />
+      <element module="PokeBE Python" copyright="MIT-0-no-linebreaks" />
+    </module2copyright>
+    <LanguageOptions name="Python">
+      <option name="fileTypeOverride" value="3" />
+      <option name="addBlankAfter" value="false" />
+      <option name="block" value="false" />
+      <option name="filler" value="=" />
+    </LanguageOptions>
+  </settings>
+</component>

@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="PokeBE Python" pattern="file[ingest]:src/*.py" />
+</component>
