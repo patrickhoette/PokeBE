@@ -1,0 +1,6 @@
+### Get Pokémon
+GET http://0.0.0.0:8080/pokemon
+Accept: application/json
+
+### Hello
+GET http://0.0.0.0:8080/hello

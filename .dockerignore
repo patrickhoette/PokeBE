@@ -1,0 +1,11 @@
+.git
+.idea
+.gradle
+**/build/
+**/.DS_Store
+.vscode
+*.iml
+*.log
+*.env
+*.md
+venv/

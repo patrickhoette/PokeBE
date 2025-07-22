@@ -1,3 +1,29 @@
+/*
+ * Copyright 2025 Patrick Hoette
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+ * documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+ * to permit persons to whom the Software is furnished to do so.
+ *
+ * THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+ * PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+ * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+ * OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+@file:Suppress("unused")
+
+package com.patrickhoette.pokebe.core.domain.validation
+
+import com.patrickhoette.pokebe.core.domain.validation.ValidationDelegate.OptionalValidationDelegate
+import com.patrickhoette.pokebe.core.domain.validation.ValidationDelegate.RequiredValidationDelegate
+import com.patrickhoette.pokebe.core.domain.validation.ValidationResult.Completed
+import com.patrickhoette.pokebe.core.domain.validation.ValidationResult.NotInitialized
+import com.patrickhoette.pokebe.core.domain.validation.ValidationStepResult.Failed
+import com.patrickhoette.pokebe.core.domain.validation.ValidationStepResult.Success
 import com.patrickhoette.pokebe.entity.core.error.RuleFailedError
 import com.patrickhoette.pokebe.entity.core.error.ValidationFailedError
 import kotlinx.atomicfu.atomic
@@ -5,6 +31,7 @@ import kotlinx.atomicfu.update
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
 sealed class ValidationStepResult<out R> {
@@ -47,32 +74,45 @@ sealed class ValidationResult<out T> {
     data object NotInitialized : ValidationResult<Nothing>()
 }
 
-sealed interface Validation<in T, out R> {
+sealed class ValidationDelegate<T, R>(
+    protected val input: T?,
+    protected val builder: ValidationScope.(ValidationStep<T>) -> ValidationStep<R>,
+) : ReadOnlyProperty<Any?, R> {
 
-    operator fun getValue(thisRef: Any?, property: KProperty<*>): R
+    protected lateinit var name: String
+    protected var result by atomic<ValidationResult<R>>(NotInitialized)
 
-    class NullValidation <in T, out R> : Validation<T, R?> {
-
-        override fun getValue(thisRef: Any?, property: KProperty<*>): R? = null
+    operator fun provideDelegate(thisRef: Any, property: KProperty<*>): ReadOnlyProperty<Any, R> {
+        name = property.name
+        return this
     }
 
-    class ValueValidation<in T, out R>(
-        private val name: String,
-        private val input: T,
-        private val builder: ValidationScope.(ValidationStep<T>) -> ValidationStep<R>,
-    ) : Validation<T, R> {
-
-        private var result by atomic<ValidationResult<R>>(NotInitialized)
-
-        override fun getValue(
-            thisRef: Any?,
-            property: KProperty<*>,
-        ): R = when (val backing = result) {
+    override fun getValue(thisRef: Any?, property: KProperty<*>): R {
+        return when (val backing = result) {
             is Completed -> backing.result
             is NotInitialized -> throw IllegalStateException("Result has not yet been compute, run Validator.run first")
         }
+    }
 
-        suspend operator fun invoke() {
+    abstract suspend operator fun invoke()
+
+    class OptionalValidationDelegate<T, R>(
+        input: T?,
+        builder: ValidationScope.(ValidationStep<T>) -> ValidationStep<R>,
+    ) : ValidationDelegate<T, R>(input, builder) {
+
+        override suspend operator fun invoke() {
+        }
+    }
+
+    class RequiredValidationDelegate<T, R>(
+        input: T?,
+        builder: ValidationScope.(ValidationStep<T>) -> ValidationStep<R>,
+    ) : ValidationDelegate<T, R>(input, builder) {
+
+        override suspend operator fun invoke() {
+            if (input == null) throw RuleFailedError("$name should not be null")
+
             val start = ValidationStart(input)
 
             val steps = object : ValidationScope() {}.builder(start)
@@ -85,7 +125,7 @@ sealed interface Validation<in T, out R> {
 @ValidationDsl
 abstract class ValidationScope {
 
-    infix fun <T : Comparable<T>> ValidationStep<T>.atLeast(
+    fun <T : Comparable<T>> ValidationStep<T>.atLeast(
         other: T,
     ): ValidationStep<T> = ValidationPart(
         hintBody = "must be at least $other",
@@ -94,7 +134,7 @@ abstract class ValidationScope {
         if (it >= other) Success(it) else Failed
     }
 
-    infix fun <T : Comparable<T>> ValidationStep<T>.atMost(
+    fun <T : Comparable<T>> ValidationStep<T>.atMost(
         other: T,
     ): ValidationStep<T> = ValidationPart(
         hintBody = "must be at most $other",
@@ -103,7 +143,7 @@ abstract class ValidationScope {
         if (it <= other) Success(it) else Failed
     }
 
-    infix fun <T : Comparable<T>> ValidationStep<T>.inRange(
+    fun <T : Comparable<T>> ValidationStep<T>.inRange(
         range: ClosedRange<T>,
     ): ValidationStep<T> = ValidationPart(
         hintBody = "must be in range $range",
@@ -112,22 +152,17 @@ abstract class ValidationScope {
         if (it in range) Success(it) else Failed
     }
 
-    infix fun ValidationStep<String>.equals(
+    fun ValidationStep<String>.matches(
         other: String,
+        ignoreCase: Boolean = false,
     ): ValidationStep<String> = ValidationPart(
-        hintBody = "must match '$other'",
+        hintBody = buildString {
+            append("must match '$other'")
+            if (ignoreCase) append(" ignoring case")
+        },
         previous = this,
     ) {
-        if (it == other) Success(it) else Failed
-    }
-
-    infix fun ValidationStep<String>.equalsIgnoringCase(
-        other: String,
-    ): ValidationStep<String> = ValidationPart(
-        hintBody = "must match (case insensitive) '$other'",
-        previous = this,
-    ) {
-        if (it == other) Success(it) else Failed
+        if (it.equals(other, ignoreCase)) Success(it) else Failed
     }
 
     fun ValidationStep<String>.int(): ValidationStep<Int> = ValidationPart(
@@ -176,22 +211,26 @@ abstract class ValidationScope {
     }
 }
 
+@ValidationDsl
 class Validator {
 
-    private val validations = atomic(emptyList<ValueValidation<*, *>>())
+    private val validations = atomic(emptyList<ValidationDelegate<*, *>>())
 
-    @ValidationDsl
-    fun <T, R> validate(
-        name: String,
+    fun <T, R> validateRequired(
         input: T?,
-        builder: @ValidationDsl ValidationScope.(ValidationStep<T>) -> ValidationStep<R>,
-    ): Validation<T, R?> = if (input == null) {
-        NullValidation()
-    } else {
-        val validation = ValueValidation<T, R>(name, input, builder)
-        validations.update { it + validation }
-        validation
-    }
+        builder: ValidationScope.(ValidationStep<T>) -> ValidationStep<R>,
+    ): RequiredValidationDelegate<T, R> = RequiredValidationDelegate(input, builder)
+        .also { validation ->
+            validations.update { it + validation }
+        }
+
+    fun <T, R> validateOptional(
+        input: T?,
+        builder: ValidationScope.(ValidationStep<T>) -> ValidationStep<R?>,
+    ): OptionalValidationDelegate<T, R?> = OptionalValidationDelegate(input, builder)
+        .also { validation ->
+            validations.update { it + validation }
+        }
 
     suspend fun run() = coroutineScope {
         val failures = validations.value
@@ -207,3 +246,7 @@ class Validator {
             }
             .awaitAll()
             .filterNotNull()
+
+        if (failures.isNotEmpty()) throw ValidationFailedError(failures)
+    }
+}
