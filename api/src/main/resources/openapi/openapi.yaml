@@ -1,0 +1,210 @@
+openapi: '3.1.0'
+
+# --------
+# | Info |
+# --------
+info:
+  title: 'PokeBE API'
+  description: 'The API for my PokeBE project'
+  version: '0.1.0'
+
+  contact:
+    name: 'Developer'
+    url: 'https://github.com/patrickhoette'
+    email: 'email@patrickhoette.com'
+
+  license:
+    name: 'MIT No Attribution'
+    identifier: 'MIT-0'
+
+# -----------
+# | Servers |
+# -----------
+servers:
+  - url: 'http://127.0.0.1:8080/'
+
+# ---------
+# | Paths |
+# ---------
+paths:
+  # Hello World
+  # ------
+  /hello:
+    get:
+      operationId: 'helloWorld'
+      description: 'Test hello world endpoint'
+      responses:
+        '200':
+          description: 'OK'
+          content:
+            text/plain:
+              schema:
+                type: 'string'
+              examples:
+                Example#1:
+                  value: 'Hello, World!'
+
+  # Pokémon List
+  # ------------
+  /pokemon:
+    get:
+      operationId: 'getPokemonList'
+      description: 'Get a list of Pokémon'
+      parameters:
+        - $ref: '#/components/parameters/pageSizeParam'
+        - $ref: '#/components/parameters/pageParam'
+
+
+      responses:
+        '200':
+          description: 'A list of Pokémon'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PokemonListResponse'
+
+# --------------
+# | Components |
+# --------------
+components:
+  # Parameters
+  # ----------
+  parameters:
+    pageParam:
+      name: page
+      in: query
+      description: 'The page you want returned, starts at 0, offset is `page * pageSize`'
+      required: false
+      default: 0
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+
+
+    pageSizeParam:
+      name: pageSize
+      in: query
+      description: 'The number of items you want returned in the list'
+      required: false
+      default: 40
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+
+  # Schemas
+  # -------
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - code
+
+      properties:
+        code:
+          type: integer
+          format: int32
+          minimum: 100
+          maximum: 599
+
+        errorCode:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ErrorCode'
+
+        message:
+          type: string
+          nullable: true
+
+
+    ErrorCode:
+      type: string
+      enum:
+        - PageSizeTooSmall
+        - PageSizeTooLarge
+        - PageInvalid
+        - DevDoneGoofed
+
+
+    PokemonListResponse:
+      type: object
+      required:
+        - hasNext
+        - page
+        - pageSize
+        - list
+
+      properties:
+        hasNext:
+          type: boolean
+        
+        page:
+          type: integer
+          format: int32
+          minimum: 0
+        
+        pageSize:
+          type: integer
+          format: int32
+          minimum: 1
+        
+        list:
+          type: array
+          items:
+            $ref: '#/components/schemas/PokemonListItemResponse'
+    
+   
+    PokemonListItemResponse:
+      type: object
+      required:
+        - id
+        - name
+        - primaryType
+      properties:
+        id:
+          type: integer
+          format: int32
+          minimum: 0
+        
+        name:
+          type: string
+        
+        imageUrl:
+          type: string
+          format: uri
+          nullable: true
+        
+        primaryType:
+          $ref: '#/components/schemas/Type'
+        
+        secondaryType:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/Type'
+
+    
+    Type:
+      type: string
+      enum:
+        - Normal
+        - Fire
+        - Water
+        - Grass
+        - Electric
+        - Ice
+        - Fighting
+        - Poison
+        - Ground
+        - Flying
+        - Psychic
+        - Bug
+        - Rock
+        - Ghost
+        - Dragon
+        - Dark
+        - Steel
+        - Fairy
+        - Stellar
+        - Unknown
+        - Shadow

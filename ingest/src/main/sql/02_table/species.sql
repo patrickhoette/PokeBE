@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS species (
+    id                    INTEGER     NOT NULL PRIMARY KEY,
+    name                  VARCHAR(50) NOT NULL,
+    generation_id         INTEGER     NOT NULL,
+    evolves_from          INTEGER,
+    evolution_chain_id    INTEGER     NOT NULL,
+    color                 PCOLOR      NOT NULL,
+    shape                 PSHAPE      NOT NULL,
+    habitat               HABITAT,
+    gender_rate           INTEGER     NOT NULL,
+    capture_rate          INTEGER     NOT NULL,
+    base_happiness        INTEGER     NOT NULL,
+    is_baby               BOOLEAN     NOT NULL,
+    hatch_counter         INTEGER     NOT NULL,
+    has_gender_difference BOOLEAN     NOT NULL,
+    growth_rate           GROWTH_RATE NOT NULL,
+    forms_switchable      BOOLEAN     NOT NULL,
+    is_legendary          BOOLEAN     NOT NULL,
+    is_mythical           BOOLEAN     NOT NULL,
+    natural_order         INTEGER     NOT NULL,
+    conquest_order        INTEGER
+);
